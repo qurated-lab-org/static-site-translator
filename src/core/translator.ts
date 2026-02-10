@@ -37,14 +37,15 @@ Rules:
 1. Maintain the original tone and style
 2. Do not translate technical terms that should remain in English (like brand names, unless specified in glossary)
 3. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
-4. Preserve any HTML entities or special characters
-5. Return translations in the exact same order as input
-6. Keep translations natural and culturally appropriate for ${targetLanguage}`;
+4. Preserve any HTML entities or special characters exactly as they appear
+5. Keep translations natural and culturally appropriate for ${targetLanguage}
+6. Return a valid JSON object where keys are the original texts and values are the translations`;
 
     const userPrompt = `Translate the following texts to ${targetLanguage}.
-Return ONLY the translations, one per line, in the same order:
+Return a JSON object (Record<string, string>) where each key is an original text and each value is its translation.
 
-${texts.map((text, i) => `${i + 1}. ${text}`).join('\n')}`;
+Input texts:
+${JSON.stringify(texts, null, 2)}`;
 
     let retries = 0;
     const maxRetries = 3;
@@ -59,22 +60,29 @@ ${texts.map((text, i) => `${i + 1}. ${text}`).join('\n')}`;
           ],
           temperature: 0.3,
           max_tokens: Math.min(4096, texts.join('').length * 3),
+          response_format: { type: "json_object" },
         });
 
         const content = response.choices[0]?.message?.content || '';
-        const translations = content.split('\n')
-          .map(line => line.replace(/^\d+\.\s*/, '').trim())
-          .filter(line => line.length > 0);
 
         // Track token usage for cost estimation
         if (response.usage) {
           this.tokensUsed += response.usage.total_tokens;
         }
 
-        // Create mapping
+        // Parse JSON response with error handling
+        let parsed: Record<string, string>;
+        try {
+          parsed = JSON.parse(content);
+        } catch (parseError) {
+          console.error('Failed to parse JSON response:', content);
+          throw new Error('Invalid JSON response from OpenAI API');
+        }
+
+        // Create mapping with fallback to original text
         const result: Record<string, string> = {};
-        texts.forEach((text, index) => {
-          result[text] = translations[index] || text; // Fallback to original if translation missing
+        texts.forEach((text) => {
+          result[text] = parsed[text] || text;
         });
 
         return result;

@@ -16,6 +16,7 @@ export interface TranslatorConfig {
   seo?: {
     injectHreflang?: boolean;
     localizeMetaTags?: boolean;
+    baseUrl?: string;
   };
   safety?: {
     preserveCodeBlocks?: boolean;

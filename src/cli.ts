@@ -3,8 +3,15 @@
 import { program } from 'commander';
 import chalk from 'chalk';
 import boxen from 'boxen';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { initCommand } from './commands/init';
 import { translateCommand } from './commands/translate';
+
+// Get package version (CommonJS compatible)
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, '../package.json'), 'utf-8')
+);
 
 // Display banner
 const banner = boxen(
@@ -16,7 +23,7 @@ const banner = boxen(
 program
   .name('ai-static-translator')
   .description('Translate your static site to multiple languages using OpenAI')
-  .version('0.1.0')
+  .version(packageJson.version)
   .addHelpText('before', banner + '\n');
 
 // Init command

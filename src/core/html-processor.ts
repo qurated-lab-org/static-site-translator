@@ -31,7 +31,7 @@ export class HtmlProcessor {
     mapping: Map<string, string>;
     processedHtml: string;
   }> {
-    const $ = cheerio.load(html);
+    const $ = cheerio.load(html, { decodeEntities: false } as any);
     const translatable: string[] = [];
     const mapping = new Map<string, string>();
 
@@ -163,7 +163,7 @@ export class HtmlProcessor {
     translations: Record<string, string>,
     targetLanguage: string
   ): Promise<string> {
-    const $ = cheerio.load(processedHtml);
+    const $ = cheerio.load(processedHtml, { decodeEntities: false } as any);
 
     // Apply title translation
     if (translations['__TITLE__']) {
@@ -258,6 +258,13 @@ export class HtmlProcessor {
     // Remove existing hreflang tags
     $('link[rel="alternate"][hreflang]').remove();
 
+    const baseUrl = this.config.seo?.baseUrl;
+
+    // Warn if baseUrl is not configured
+    if (!baseUrl) {
+      console.warn('⚠️  seo.baseUrl is not configured. Hreflang tags will use relative paths, which may not be ideal for SEO.');
+    }
+
     // Add hreflang tags for all configured languages
     const languages = [
       ...this.config.targetLanguages,
@@ -266,7 +273,13 @@ export class HtmlProcessor {
 
     languages.forEach(lang => {
       const hreflang = lang === currentLanguage ? 'x-default' : lang;
-      $('head').append(`<link rel="alternate" hreflang="${hreflang}" href="/${lang}/" />\n`);
+
+      // Generate absolute or relative URL
+      const href = baseUrl
+        ? `${baseUrl.replace(/\/$/, '')}/${lang}/`
+        : `/${lang}/`;
+
+      $('head').append(`<link rel="alternate" hreflang="${hreflang}" href="${href}" />\n`);
     });
   }
 

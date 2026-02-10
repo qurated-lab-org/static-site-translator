@@ -25,6 +25,7 @@ const ConfigSchema = z.object({
   seo: z.object({
     injectHreflang: z.boolean().optional().default(true),
     localizeMetaTags: z.boolean().optional().default(true),
+    baseUrl: z.string().url().optional(),
   }).optional(),
   safety: z.object({
     preserveCodeBlocks: z.boolean().optional().default(true),
