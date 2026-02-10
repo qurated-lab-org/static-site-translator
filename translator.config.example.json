@@ -1,0 +1,60 @@
+{
+  "sourceDir": "./dist",
+  "outputDir": "./dist-i18n",
+  "targetLanguages": ["es", "fr", "de", "ja", "zh"],
+  "openaiModel": "gpt-4o-mini",
+  "glossary": {
+    "es": {
+      "Sign Up": "Registrarse",
+      "Log In": "Iniciar Sesión",
+      "Dashboard": "Panel de Control",
+      "Settings": "Configuración"
+    },
+    "fr": {
+      "Sign Up": "S'inscrire",
+      "Log In": "Se Connecter",
+      "Dashboard": "Tableau de Bord",
+      "Settings": "Paramètres"
+    },
+    "de": {
+      "Sign Up": "Registrieren",
+      "Log In": "Anmelden",
+      "Dashboard": "Dashboard",
+      "Settings": "Einstellungen"
+    },
+    "ja": {
+      "Sign Up": "新規登録",
+      "Log In": "ログイン",
+      "Dashboard": "ダッシュボード",
+      "Settings": "設定"
+    },
+    "zh": {
+      "Sign Up": "注册",
+      "Log In": "登录",
+      "Dashboard": "仪表板",
+      "Settings": "设置"
+    }
+  },
+  "ignorePaths": [
+    "**/admin/**",
+    "**/api/**",
+    "**/*.min.html",
+    "**/node_modules/**"
+  ],
+  "cache": {
+    "enabled": true,
+    "directory": ".translator-cache"
+  },
+  "parallel": {
+    "limit": 5
+  },
+  "seo": {
+    "injectHreflang": true,
+    "localizeMetaTags": true
+  },
+  "safety": {
+    "preserveCodeBlocks": true,
+    "preserveScripts": true,
+    "preserveStyles": true
+  }
+}

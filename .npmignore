@@ -1,0 +1,48 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Configuration files
+tsconfig.json
+.prettierrc
+.eslintrc
+
+# Development files
+.env
+.env.*
+translator.config.json
+
+# Cache
+.translator-cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Documentation source
+docs/
+
+# Test files
+test/
+*.test.js
+*.spec.js
+
+# CI/CD
+.github/
+.travis.yml
+.circleci/
+
+# Examples
+examples/
+
+# Temporary files
+*.tmp
+temp/

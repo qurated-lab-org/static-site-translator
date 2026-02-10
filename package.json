@@ -1,0 +1,72 @@
+{
+  "name": "ai-static-translator",
+  "version": "0.1.0",
+  "description": "Smart multi-language translator for static sites powered by OpenAI",
+  "main": "dist/cli.js",
+  "bin": {
+    "ai-static-translator": "./dist/cli.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "build": "tsc",
+    "postbuild": "chmod +x dist/cli.js",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "prepublishOnly": "pnpm run build"
+  },
+  "keywords": [
+    "static-site",
+    "translation",
+    "i18n",
+    "openai",
+    "cli",
+    "html",
+    "localization",
+    "multilingual"
+  ],
+  "author": "AI Static Translator Contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@8.0.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/ai-static-translator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/ai-static-translator/issues"
+  },
+  "homepage": "https://github.com/yourusername/ai-static-translator#readme",
+  "dependencies": {
+    "boxen": "^5.1.2",
+    "chalk": "^4.1.2",
+    "cheerio": "^1.1.0",
+    "commander": "^14.0.3",
+    "dotenv": "^17.2.4",
+    "fs-extra": "^11.3.3",
+    "glob": "^10.5.0",
+    "inquirer": "^8.2.7",
+    "openai": "^6.20.0",
+    "ora": "^5.4.1",
+    "p-limit": "^3.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/glob": "^8.1.0",
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^25.2.3",
+    "typescript": "^5.9.3"
+  }
+}
