@@ -29,6 +29,7 @@ export class HtmlProcessor {
   async extractTranslatableContent(html: string): Promise<{
     translatable: string[];
     mapping: Map<string, string>;
+    processedHtml: string;
   }> {
     const $ = cheerio.load(html);
     const translatable: string[] = [];
@@ -124,7 +125,10 @@ export class HtmlProcessor {
     // Extract text nodes
     this.extractTextNodes($, $('body'), translatable, mapping);
 
-    return { translatable, mapping };
+    // Return processed HTML with placeholders
+    const processedHtml = $.html();
+
+    return { translatable, mapping, processedHtml };
   }
 
   private extractTextNodes(
@@ -155,11 +159,11 @@ export class HtmlProcessor {
   }
 
   async applyTranslations(
-    html: string,
+    processedHtml: string,
     translations: Record<string, string>,
     targetLanguage: string
   ): Promise<string> {
-    const $ = cheerio.load(html);
+    const $ = cheerio.load(processedHtml);
 
     // Apply title translation
     if (translations['__TITLE__']) {

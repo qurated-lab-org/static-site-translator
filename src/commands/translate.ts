@@ -196,12 +196,18 @@ async function translateFile(
     }
 
     // Extract translatable content
-    const { translatable, mapping } = await htmlProcessor.extractTranslatableContent(htmlContent);
+    const { translatable, mapping, processedHtml } = await htmlProcessor.extractTranslatableContent(htmlContent);
 
     if (translatable.length === 0) {
-      // No content to translate, copy as-is
+      // No content to translate, but still apply language changes
+      const translatedHtml = await htmlProcessor.applyTranslations(
+        processedHtml,
+        {},
+        targetLanguage
+      );
+
       await fs.ensureDir(path.dirname(targetPath));
-      await fs.copy(sourcePath, targetPath);
+      await fs.writeFile(targetPath, translatedHtml, 'utf-8');
 
       return {
         source: sourcePath,
@@ -218,9 +224,9 @@ async function translateFile(
       mapping
     );
 
-    // Apply translations
+    // Apply translations to processed HTML (with placeholders)
     const translatedHtml = await htmlProcessor.applyTranslations(
-      htmlContent,
+      processedHtml,
       translations,
       targetLanguage
     );
