@@ -17,12 +17,11 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "preinstall": "npx only-allow pnpm",
     "build": "tsc",
     "postbuild": "chmod +x dist/cli.js",
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "static-site",
