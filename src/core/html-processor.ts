@@ -92,6 +92,73 @@ export class HtmlProcessor {
       mapping.set(key, metaKeywords);
     }
 
+    // Extract translatable text from Open Graph meta tags
+    const ogTitle = $('meta[property="og:title"]').attr('content');
+    if (ogTitle) {
+      const key = `__OG_TITLE__`;
+      translatable.push(ogTitle);
+      mapping.set(key, ogTitle);
+    }
+
+    const ogDescription = $('meta[property="og:description"]').attr('content');
+    if (ogDescription) {
+      const key = `__OG_DESC__`;
+      translatable.push(ogDescription);
+      mapping.set(key, ogDescription);
+    }
+
+    const ogSiteName = $('meta[property="og:site_name"]').attr('content');
+    if (ogSiteName) {
+      const key = `__OG_SITE_NAME__`;
+      translatable.push(ogSiteName);
+      mapping.set(key, ogSiteName);
+    }
+
+    const ogImageAlt = $('meta[property="og:image:alt"]').attr('content');
+    if (ogImageAlt) {
+      const key = `__OG_IMAGE_ALT__`;
+      translatable.push(ogImageAlt);
+      mapping.set(key, ogImageAlt);
+    }
+
+    // Extract translatable text from Twitter Card meta tags
+    const twitterTitle = $('meta[name="twitter:title"]').attr('content');
+    if (twitterTitle) {
+      const key = `__TWITTER_TITLE__`;
+      translatable.push(twitterTitle);
+      mapping.set(key, twitterTitle);
+    }
+
+    const twitterDescription = $('meta[name="twitter:description"]').attr('content');
+    if (twitterDescription) {
+      const key = `__TWITTER_DESC__`;
+      translatable.push(twitterDescription);
+      mapping.set(key, twitterDescription);
+    }
+
+    const twitterImageAlt = $('meta[name="twitter:image:alt"]').attr('content');
+    if (twitterImageAlt) {
+      const key = `__TWITTER_IMAGE_ALT__`;
+      translatable.push(twitterImageAlt);
+      mapping.set(key, twitterImageAlt);
+    }
+
+    // Extract translatable text from JSON-LD structured data
+    $('script[type="application/ld+json"]').each((index, elem) => {
+      const $elem = $(elem);
+      const jsonContent = $elem.html();
+      if (jsonContent) {
+        try {
+          const jsonData = JSON.parse(jsonContent);
+          const key = `__JSON_LD_${index}__`;
+          translatable.push(JSON.stringify(jsonData));
+          mapping.set(key, jsonContent);
+        } catch (e) {
+          // Skip invalid JSON
+        }
+      }
+    });
+
     // Extract translatable text from alt attributes
     $('img[alt]').each((index, elem) => {
       const alt = $(elem).attr('alt');
@@ -233,6 +300,50 @@ export class HtmlProcessor {
     if (translations['__META_KEYWORDS__']) {
       $('meta[name="keywords"]').attr('content', translations['__META_KEYWORDS__']);
     }
+
+    // Apply Open Graph meta tag translations
+    if (translations['__OG_TITLE__']) {
+      $('meta[property="og:title"]').attr('content', translations['__OG_TITLE__']);
+    }
+
+    if (translations['__OG_DESC__']) {
+      $('meta[property="og:description"]').attr('content', translations['__OG_DESC__']);
+    }
+
+    if (translations['__OG_SITE_NAME__']) {
+      $('meta[property="og:site_name"]').attr('content', translations['__OG_SITE_NAME__']);
+    }
+
+    if (translations['__OG_IMAGE_ALT__']) {
+      $('meta[property="og:image:alt"]').attr('content', translations['__OG_IMAGE_ALT__']);
+    }
+
+    // Apply Twitter Card meta tag translations
+    if (translations['__TWITTER_TITLE__']) {
+      $('meta[name="twitter:title"]').attr('content', translations['__TWITTER_TITLE__']);
+    }
+
+    if (translations['__TWITTER_DESC__']) {
+      $('meta[name="twitter:description"]').attr('content', translations['__TWITTER_DESC__']);
+    }
+
+    if (translations['__TWITTER_IMAGE_ALT__']) {
+      $('meta[name="twitter:image:alt"]').attr('content', translations['__TWITTER_IMAGE_ALT__']);
+    }
+
+    // Apply JSON-LD structured data translations
+    $('script[type="application/ld+json"]').each((index, elem) => {
+      const key = `__JSON_LD_${index}__`;
+      if (translations[key]) {
+        try {
+          // Parse the translated JSON string and re-stringify with proper formatting
+          const translatedData = JSON.parse(translations[key]);
+          $(elem).html(JSON.stringify(translatedData));
+        } catch (e) {
+          // Skip if translation resulted in invalid JSON
+        }
+      }
+    });
 
     // Apply alt attribute translations
     $('img[alt]').each((index, elem) => {
