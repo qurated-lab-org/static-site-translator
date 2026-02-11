@@ -142,13 +142,26 @@ export class HtmlProcessor {
       'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'li', 'td', 'th', 'dt', 'dd',
       'blockquote', 'figcaption', 'caption',
-      'label', 'legend', 'summary'
+      'label', 'legend', 'summary', 'a'
     ];
 
-    element.find(blockElements.join(',')).each((index, elem) => {
-      const $elem = $(elem);
-      const innerHTML = $elem.html();
+    const blockSelector = blockElements.join(',');
 
+    element.find(blockSelector).each((index, elem) => {
+      const $elem = $(elem);
+
+      // Skip if this element is already marked (avoid duplicates)
+      if ($elem.attr('data-translate-key')) {
+        return;
+      }
+
+      // Skip if this element contains block children (to avoid duplicates with nested blocks)
+      const hasBlockChildren = $elem.find(blockSelector).length > 0;
+      if (hasBlockChildren) {
+        return;
+      }
+
+      const innerHTML = $elem.html();
       if (!innerHTML) return;
 
       // Check if this element has meaningful text content
