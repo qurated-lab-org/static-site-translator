@@ -122,13 +122,54 @@ export class HtmlProcessor {
       }
     });
 
-    // Extract text nodes
-    this.extractTextNodes($, $('body'), translatable, mapping);
+    // Extract block-level elements with their innerHTML (NEW APPROACH)
+    this.extractBlockElements($, $('body'), translatable, mapping);
 
     // Return processed HTML with placeholders
     const processedHtml = $.html();
 
     return { translatable, mapping, processedHtml };
+  }
+
+  private extractBlockElements(
+    $: cheerio.CheerioAPI,
+    element: cheerio.Cheerio<any>,
+    translatable: string[],
+    mapping: Map<string, string>
+  ): void {
+    // Block-level elements that should be translated as a whole
+    const blockElements = [
+      'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'li', 'td', 'th', 'dt', 'dd',
+      'blockquote', 'figcaption', 'caption',
+      'label', 'legend', 'summary'
+    ];
+
+    element.find(blockElements.join(',')).each((index, elem) => {
+      const $elem = $(elem);
+      const innerHTML = $elem.html();
+
+      if (!innerHTML) return;
+
+      // Check if this element has meaningful text content
+      const textContent = $elem.text().trim();
+      if (!textContent || textContent.match(/^__SKIP_PLACEHOLDER_\d+__$/)) {
+        return;
+      }
+
+      // Check if this element contains only placeholder (skip it)
+      if (innerHTML.match(/^__SKIP_PLACEHOLDER_\d+__$/)) {
+        return;
+      }
+
+      // Generate unique key for this block
+      const key = `__BLOCK_${translatable.length}__`;
+      translatable.push(innerHTML);
+      mapping.set(key, innerHTML);
+
+      // Mark this element with data attribute for later replacement
+      $elem.attr('data-translate-key', key);
+    });
   }
 
   private extractTextNodes(
@@ -204,9 +245,8 @@ export class HtmlProcessor {
       }
     });
 
-    // Apply text node translations
-    let textIndex = 0;
-    this.replaceTextNodes($, $('body'), translations, textIndex);
+    // Apply block-level element translations (NEW APPROACH)
+    this.applyBlockTranslations($, translations);
 
     // Add hreflang tags if enabled
     if (this.config.seo?.injectHreflang !== false) {
@@ -222,6 +262,24 @@ export class HtmlProcessor {
     result = this.restorePlaceholders(result);
 
     return result;
+  }
+
+  private applyBlockTranslations(
+    $: cheerio.CheerioAPI,
+    translations: Record<string, string>
+  ): void {
+    // Find all elements marked with data-translate-key
+    $('[data-translate-key]').each((_, elem) => {
+      const $elem = $(elem);
+      const key = $elem.attr('data-translate-key');
+
+      if (key && translations[key]) {
+        // Replace innerHTML with translated HTML
+        $elem.html(translations[key]);
+        // Remove the data attribute after translation
+        $elem.removeAttr('data-translate-key');
+      }
+    });
   }
 
   private replaceTextNodes(

@@ -21,7 +21,7 @@ export class Translator {
   async translateBatch(
     texts: string[],
     targetLanguage: string,
-    context?: { isTitle?: boolean; isMeta?: boolean }
+    context?: { isTitle?: boolean; isMeta?: boolean; isHtmlBlock?: boolean }
   ): Promise<Record<string, string>> {
     if (texts.length === 0) {
       return {};
@@ -34,13 +34,19 @@ export class Translator {
 ${contextPrompt}
 ${glossaryPrompt}
 Critical Rules:
-1. Maintain the original tone and style
-2. Do not translate technical terms that should remain in English (like brand names, unless specified in glossary)
-3. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
-4. Preserve any HTML entities or special characters exactly as they appear
-5. Keep translations natural and culturally appropriate for ${targetLanguage}
-6. IMPORTANT: Return a JSON object with a "translations" array containing translations IN THE EXACT SAME ORDER as the input array
-7. The number of translations MUST equal the number of input texts`;
+1. Input texts may contain HTML tags (e.g., <a>, <b>, <strong>, <em>, <span>, <br>, etc.)
+2. NEVER modify HTML tag structure, tag names, or attributes - ONLY translate text content
+3. Preserve all HTML tags EXACTLY as they appear in the input
+4. Translate text inside and between HTML tags while keeping the tags completely intact
+5. Example: "<a href='/login'>Login here</a>" → "<a href='/login'>ここでログイン</a>"
+6. Example: "Click <b>here</b> to continue." → "続けるには<b>こちら</b>をクリックしてください。"
+7. Maintain the original tone and style of the content
+8. Do not translate technical terms that should remain in English (like brand names, unless specified in glossary)
+9. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
+10. Preserve any HTML entities or special characters exactly as they appear
+11. Keep translations natural and culturally appropriate for ${targetLanguage}
+12. IMPORTANT: Return a JSON object with a "translations" array containing translations IN THE EXACT SAME ORDER as the input array
+13. The number of translations MUST equal the number of input texts`;
 
     const userPrompt = `Translate the following ${texts.length} texts to ${targetLanguage}.
 
@@ -159,6 +165,7 @@ ${JSON.stringify(texts, null, 2)}`;
         if (batch.includes(value)) {
           if (key === '__TITLE__') context.isTitle = true;
           if (key.startsWith('__META_')) context.isMeta = true;
+          if (key.startsWith('__BLOCK_')) context.isHtmlBlock = true;
         }
       }
 
@@ -188,7 +195,7 @@ ${JSON.stringify(texts, null, 2)}`;
     return `\nGlossary (use these translations consistently):\n${entries}\n`;
   }
 
-  private buildContextPrompt(context?: { isTitle?: boolean; isMeta?: boolean }): string {
+  private buildContextPrompt(context?: { isTitle?: boolean; isMeta?: boolean; isHtmlBlock?: boolean }): string {
     if (!context) return '';
 
     if (context.isTitle) {
@@ -197,6 +204,10 @@ ${JSON.stringify(texts, null, 2)}`;
 
     if (context.isMeta) {
       return 'You are translating meta descriptions. Optimize for search engines while maintaining the message.';
+    }
+
+    if (context.isHtmlBlock) {
+      return 'You are translating HTML content blocks that may contain inline tags (<a>, <b>, <strong>, etc.). Preserve all HTML structure.';
     }
 
     return '';
