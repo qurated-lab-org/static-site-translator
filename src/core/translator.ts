@@ -39,12 +39,19 @@ Rules:
 3. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
 4. Preserve any HTML entities or special characters exactly as they appear
 5. Keep translations natural and culturally appropriate for ${targetLanguage}
-6. Return a valid JSON object where keys are the original texts and values are the translations`;
+6. Return a valid JSON object with a "translations" key containing an object where keys are original texts and values are translations`;
 
     const userPrompt = `Translate the following texts to ${targetLanguage}.
-Return a JSON object (Record<string, string>) where each key is an original text and each value is its translation.
+Return a JSON object in this exact format:
+{
+  "translations": {
+    "original text 1": "translated text 1",
+    "original text 2": "translated text 2",
+    ...
+  }
+}
 
-Input texts:
+Input texts to translate:
 ${JSON.stringify(texts, null, 2)}`;
 
     let retries = 0;
@@ -52,6 +59,10 @@ ${JSON.stringify(texts, null, 2)}`;
 
     while (retries < maxRetries) {
       try {
+        // Calculate appropriate max_tokens: input length * 8 to account for longer translations and JSON overhead
+        const estimatedOutputTokens = Math.max(2000, texts.join('').length * 8);
+        const maxTokens = Math.min(16000, estimatedOutputTokens);
+
         const response = await this.openai.chat.completions.create({
           model: this.config.openaiModel || 'gpt-4o-mini',
           messages: [
@@ -59,7 +70,7 @@ ${JSON.stringify(texts, null, 2)}`;
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.3,
-          max_tokens: Math.min(4096, texts.join('').length * 3),
+          max_tokens: maxTokens,
           response_format: { type: "json_object" },
         });
 
@@ -71,18 +82,23 @@ ${JSON.stringify(texts, null, 2)}`;
         }
 
         // Parse JSON response with error handling
-        let parsed: Record<string, string>;
+        let parsed: { translations: Record<string, string> };
         try {
           parsed = JSON.parse(content);
+
+          // Validate response structure
+          if (!parsed.translations || typeof parsed.translations !== 'object') {
+            throw new Error('Response missing "translations" object');
+          }
         } catch (parseError) {
           console.error('Failed to parse JSON response:', content);
-          throw new Error('Invalid JSON response from OpenAI API');
+          throw new Error(`Invalid JSON response from OpenAI API: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
         }
 
         // Create mapping with fallback to original text
         const result: Record<string, string> = {};
         texts.forEach((text) => {
-          result[text] = parsed[text] || text;
+          result[text] = parsed.translations[text] || text;
         });
 
         return result;
@@ -114,7 +130,7 @@ ${JSON.stringify(texts, null, 2)}`;
     mapping: Map<string, string>
   ): Promise<Record<string, string>> {
     const uniqueTexts = Array.from(new Set(texts));
-    const batchSize = 50; // Process in batches to avoid token limits
+    const batchSize = 20; // Reduced batch size for better translation quality
     const translatedTexts: Record<string, string> = {};
 
     for (let i = 0; i < uniqueTexts.length; i += batchSize) {
