@@ -33,25 +33,30 @@ export class Translator {
     const systemPrompt = `You are a professional translator specializing in website localization.
 ${contextPrompt}
 ${glossaryPrompt}
-Rules:
+Critical Rules:
 1. Maintain the original tone and style
 2. Do not translate technical terms that should remain in English (like brand names, unless specified in glossary)
 3. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
 4. Preserve any HTML entities or special characters exactly as they appear
 5. Keep translations natural and culturally appropriate for ${targetLanguage}
-6. Return a valid JSON object with a "translations" key containing an object where keys are original texts and values are translations`;
+6. IMPORTANT: Return a JSON object with a "translations" array containing translations IN THE EXACT SAME ORDER as the input array
+7. The number of translations MUST equal the number of input texts`;
 
-    const userPrompt = `Translate the following texts to ${targetLanguage}.
-Return a JSON object in this exact format:
+    const userPrompt = `Translate the following ${texts.length} texts to ${targetLanguage}.
+
+CRITICAL: Return a JSON object with this EXACT structure:
 {
-  "translations": {
-    "original text 1": "translated text 1",
-    "original text 2": "translated text 2",
+  "translations": [
+    "translation of text 0",
+    "translation of text 1",
+    "translation of text 2",
     ...
-  }
+  ]
 }
 
-Input texts to translate:
+The "translations" array MUST contain exactly ${texts.length} items in the same order as the input.
+
+Input texts (array of ${texts.length} items):
 ${JSON.stringify(texts, null, 2)}`;
 
     let retries = 0;
@@ -59,8 +64,8 @@ ${JSON.stringify(texts, null, 2)}`;
 
     while (retries < maxRetries) {
       try {
-        // Calculate appropriate max_tokens: input length * 8 to account for longer translations and JSON overhead
-        const estimatedOutputTokens = Math.max(2000, texts.join('').length * 8);
+        // Calculate appropriate max_tokens: input length * 10 for safety margin
+        const estimatedOutputTokens = Math.max(2000, texts.join('').length * 10);
         const maxTokens = Math.min(16000, estimatedOutputTokens);
 
         const response = await this.openai.chat.completions.create({
@@ -82,23 +87,35 @@ ${JSON.stringify(texts, null, 2)}`;
         }
 
         // Parse JSON response with error handling
-        let parsed: { translations: Record<string, string> };
+        let parsed: { translations: string[] };
         try {
           parsed = JSON.parse(content);
 
           // Validate response structure
-          if (!parsed.translations || typeof parsed.translations !== 'object') {
-            throw new Error('Response missing "translations" object');
+          if (!parsed.translations || !Array.isArray(parsed.translations)) {
+            throw new Error('Response missing "translations" array or translations is not an array');
+          }
+
+          // Validate array length
+          if (parsed.translations.length !== texts.length) {
+            console.warn(`Translation count mismatch: expected ${texts.length}, got ${parsed.translations.length}`);
+            // Pad with original texts if needed
+            while (parsed.translations.length < texts.length) {
+              const missingIndex = parsed.translations.length;
+              const originalText = texts[missingIndex] || '';
+              parsed.translations.push(originalText);
+              console.warn(`Added missing translation at index ${missingIndex}: ${originalText}`);
+            }
           }
         } catch (parseError) {
           console.error('Failed to parse JSON response:', content);
           throw new Error(`Invalid JSON response from OpenAI API: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
         }
 
-        // Create mapping with fallback to original text
+        // Create mapping using array index
         const result: Record<string, string> = {};
-        texts.forEach((text) => {
-          result[text] = parsed.translations[text] || text;
+        texts.forEach((text, index) => {
+          result[text] = parsed.translations[index] || text;
         });
 
         return result;
