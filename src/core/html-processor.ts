@@ -142,7 +142,7 @@ export class HtmlProcessor {
       'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'li', 'td', 'th', 'dt', 'dd',
       'blockquote', 'figcaption', 'caption',
-      'label', 'legend', 'summary', 'a'
+      'label', 'legend', 'summary'
     ];
 
     const blockSelector = blockElements.join(',');
