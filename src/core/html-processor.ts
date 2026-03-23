@@ -555,7 +555,7 @@ export class HtmlProcessor {
     $: cheerio.CheerioAPI,
     translations: Record<string, string>
   ): void {
-    // 翻訳対象の文字列がなければスキップ
+    // 翻訳対象の文字列がなければ属性だけ除去してスキップ
     if (this.rscStrings.size === 0) {
       $('script[data-rsc-payload]').each((_, elem) => {
         $(elem).removeAttr('data-rsc-payload');
@@ -563,72 +563,206 @@ export class HtmlProcessor {
       return;
     }
 
+    // すべてのRSCスクリプトを配列で取得（順序が重要）
+    const rscElems: any[] = [];
     $('script[data-rsc-payload]').each((_, elem) => {
-      const $elem = $(elem);
+      rscElems.push(elem);
+    });
+
+    // Tプレフィックスで参照されるデータスクリプトの新しいバイト長を記録するmap
+    // key: データID (例: "12"), value: 翻訳後のバイト長
+    const updatedBlobSizes = new Map<string, number>();
+
+    // まず各スクリプトの翻訳を行い、Tプレフィックス参照のデータサイズを収集
+    const translatedContents = new Map<number, string>();
+
+    for (let i = 0; i < rscElems.length; i++) {
+      const $elem = $(rscElems[i]);
       const content = $elem.html() || '';
 
-      // self.__next_f.push([...]) の引数を抽出（最後の ) まで greedy でマッチ）
       const pushMatch = content.match(/self\.__next_f\.push\(([\s\S]*)\)\s*$/);
-      if (!pushMatch) {
-        $elem.removeAttr('data-rsc-payload');
-        return;
-      }
+      if (!pushMatch) continue;
 
       let args: unknown;
       try {
         args = JSON.parse(pushMatch[1] ?? '');
       } catch {
-        $elem.removeAttr('data-rsc-payload');
-        return;
+        continue;
       }
 
-      if (!Array.isArray(args) || args.length < 2) {
-        $elem.removeAttr('data-rsc-payload');
-        return;
-      }
+      if (!Array.isArray(args) || args.length < 2) continue;
 
       const type = args[0];
       const data = args[1];
 
-      let newContent: string;
+      if (type !== 1 || typeof data !== 'string') {
+        // type=0など: data全体を翻訳
+        const translated = this.translateValue(data, translations);
+        translatedContents.set(i, `self.__next_f.push(${JSON.stringify([type, translated])})`);
+        continue;
+      }
 
-      if (type === 1 && typeof data === 'string') {
-        // RSCフライトデータ: 各行をパース→翻訳→再シリアライズ
-        const lines = data.split('\n');
-        const translatedLines = lines.map(line => {
+      // RSCフライトデータ: 各行をパース→翻訳→再シリアライズ
+      const lines = data.split('\n');
+      const translatedLines = lines.map(line => {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) return line;
+        const id = line.slice(0, colonIdx);
+        const rest = line.slice(colonIdx + 1);
+
+        // Tプレフィックス行: バイナリブロブのサイズ指定（後で更新）
+        if (rest.startsWith('T')) {
+          // "Thex,..." の形式 - このラウンドではそのまま残し、後で更新
+          return line;
+        }
+
+        const jsonPart = rest.trim();
+        if (!jsonPart || !this.hasCjk(jsonPart)) return line;
+
+        try {
+          const parsed = JSON.parse(jsonPart);
+          const translated = this.translateValue(parsed, translations);
+          return `${id}:${JSON.stringify(translated)}`;
+        } catch {
+          // JSONでない行はそのまま文字列置換
+          let result = jsonPart;
+          for (const [originalText, key] of this.rscStrings.entries()) {
+            const tr = translations[key];
+            if (tr && tr !== originalText) {
+              result = result.split(originalText).join(tr);
+            }
+          }
+          return `${id}:${result}`;
+        }
+      });
+
+      const translatedData = translatedLines.join('\n');
+
+      // このスクリプトがTプレフィックス行を含む場合、対応するデータIDを記録
+      for (const line of translatedLines) {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) continue;
+        const id = line.slice(0, colonIdx);
+        const rest = line.slice(colonIdx + 1);
+        if (rest.startsWith('T')) {
+          // "Thex,..." の形式からIDを抽出
+          const hexMatch = rest.match(/^T([0-9a-fA-F]+),/);
+          if (hexMatch) {
+            // このIDのデータは別スクリプトに含まれる - 後で更新が必要
+            updatedBlobSizes.set(id, -1); // プレースホルダー
+          }
+        }
+      }
+
+      translatedContents.set(i, `self.__next_f.push(${JSON.stringify([type, translatedData])})`);
+    }
+
+    // Tプレフィックスで参照される「生データスクリプト」のバイト長を計算して更新
+    // 生データスクリプトは単一の文字列データを持ち、"id:json" 形式の行を含まないもの
+    for (let i = 0; i < rscElems.length; i++) {
+      const $elem = $(rscElems[i]);
+      const content = $elem.html() || '';
+
+      const pushMatch = content.match(/self\.__next_f\.push\(([\s\S]*)\)\s*$/);
+      if (!pushMatch) continue;
+
+      let args: unknown;
+      try {
+        args = JSON.parse(pushMatch[1] ?? '');
+      } catch {
+        continue;
+      }
+
+      if (!Array.isArray(args) || args.length < 2) continue;
+      if (args[0] !== 1 || typeof args[1] !== 'string') continue;
+
+      const data = args[1] as string;
+      // "id:content" 形式の行を含まず、単一の生コンテンツ（HTMLなど）の場合
+      const isRawContent = !data.split('\n').some(l => {
+        const col = l.indexOf(':');
+        if (col === -1) return false;
+        const id = l.slice(0, col);
+        return /^\w+$/.test(id);
+      });
+
+      if (!isRawContent) continue;
+
+      // このスクリプトは生データ - 翻訳してバイト長を計算
+      let translatedData = data;
+      if (this.hasCjk(data)) {
+        for (const [originalText, key] of this.rscStrings.entries()) {
+          const tr = translations[key];
+          if (tr && tr !== originalText) {
+            translatedData = translatedData.split(originalText).join(tr);
+          }
+        }
+      }
+
+      const newByteLen = Buffer.byteLength(translatedData, 'utf8');
+      translatedContents.set(i, `self.__next_f.push(${JSON.stringify([1, translatedData])})`);
+
+      // 前のスクリプトのTプレフィックス行を更新する必要がある
+      // Tプレフィックスで参照されるIDを特定するために前のスクリプトを調べる
+      // 生データの前のスクリプトのTプレフィックスを更新
+      for (let j = i - 1; j >= 0; j--) {
+        const prevContent = translatedContents.get(j);
+        if (!prevContent) continue;
+
+        // このスクリプトがTプレフィックスを持つ行を含むか確認
+        const prevPushMatch = prevContent.match(/self\.__next_f\.push\(([\s\S]*)\)\s*$/);
+        if (!prevPushMatch) continue;
+
+        let prevArgs: unknown;
+        try {
+          prevArgs = JSON.parse(prevPushMatch[1] ?? '');
+        } catch {
+          continue;
+        }
+
+        if (!Array.isArray(prevArgs) || prevArgs.length < 2) continue;
+        if (prevArgs[0] !== 1 || typeof prevArgs[1] !== 'string') continue;
+
+        const prevData = prevArgs[1] as string;
+        let updated = false;
+        const updatedLines = prevData.split('\n').map(line => {
           const colonIdx = line.indexOf(':');
           if (colonIdx === -1) return line;
           const id = line.slice(0, colonIdx);
-          const jsonPart = line.slice(colonIdx + 1).trim();
-          if (!jsonPart || !this.hasCjk(jsonPart)) return line;
+          const rest = line.slice(colonIdx + 1);
+          if (!rest.startsWith('T')) return line;
 
-          try {
-            const parsed = JSON.parse(jsonPart);
-            const translated = this.translateValue(parsed, translations);
-            return `${id}:${JSON.stringify(translated)}`;
-          } catch {
-            // JSONでない行はそのまま文字列置換
-            let result = jsonPart;
-            for (const [originalText, key] of this.rscStrings.entries()) {
-              const tr = translations[key];
-              if (tr && tr !== originalText) {
-                result = result.split(originalText).join(tr);
-              }
-            }
-            return `${id}:${result}`;
+          const hexMatch = rest.match(/^T([0-9a-fA-F]+),(.*)/);
+          if (!hexMatch) return line;
+
+          const oldSize = parseInt(hexMatch[1] ?? '0', 16);
+          // 元のデータのバイト長と比較
+          const originalByteLen = Buffer.byteLength(data, 'utf8');
+          if (oldSize === originalByteLen) {
+            // このTプレフィックスが今の生データを参照している
+            const newHex = newByteLen.toString(16);
+            updated = true;
+            return `${id}:T${newHex},${hexMatch[2]}`;
           }
+          return line;
         });
-        const translatedData = translatedLines.join('\n');
-        newContent = `self.__next_f.push(${JSON.stringify([type, translatedData])})`;
-      } else {
-        // type=0など: data全体を翻訳
-        const translated = this.translateValue(data, translations);
-        newContent = `self.__next_f.push(${JSON.stringify([type, translated])})`;
-      }
 
+        if (updated) {
+          const newPrevData = updatedLines.join('\n');
+          translatedContents.set(j, `self.__next_f.push(${JSON.stringify([1, newPrevData])})`);
+          break;
+        }
+      }
+    }
+
+    // すべての翻訳済みコンテンツを適用
+    for (let i = 0; i < rscElems.length; i++) {
+      const $elem = $(rscElems[i]);
       $elem.removeAttr('data-rsc-payload');
-      $elem.html(newContent);
-    });
+      const newContent = translatedContents.get(i);
+      if (newContent) {
+        $elem.html(newContent);
+      }
+    }
   }
 
   private replaceTextNodes(
