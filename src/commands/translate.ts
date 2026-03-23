@@ -87,13 +87,15 @@ export async function translateCommand(options: {
       for (const targetLanguage of config.targetLanguages) {
         tasks.push(
           limit(async () => {
+            // HtmlProcessorはステートフルなので各タスクで新しいインスタンスを使う
+            const fileProcessor = new HtmlProcessor(config);
             const result = await translateFile(
               htmlFile,
               targetLanguage,
               sourceDir,
               config,
               translator,
-              htmlProcessor,
+              fileProcessor,
               cacheManager,
               options.verbose || false
             );
