@@ -29,7 +29,33 @@ export class HtmlProcessor {
     return result;
   }
 
+  // CJK文字（日本語・中国語・韓国語）を含む文字列かどうかを判定
+  private hasCjk(text: string): boolean {
+    return /[\u3000-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF]/.test(text);
+  }
+
+  // 値を再帰的に走査してCJK文字列を収集する
+  private collectCjkStrings(value: unknown, result: Set<string>): void {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 1 && this.hasCjk(trimmed)) {
+        result.add(trimmed);
+      }
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        this.collectCjkStrings(item, result);
+      }
+    } else if (value !== null && typeof value === 'object') {
+      for (const v of Object.values(value as Record<string, unknown>)) {
+        this.collectCjkStrings(v, result);
+      }
+    }
+  }
+
   // Extract translatable text strings from Next.js RSC payload scripts
+  // RSCペイロードの形式: self.__next_f.push([type, data])
+  // type=1: dataはRSCフライトデータ文字列（行ごとに "id:json\n" の形式）
+  // type=0や他: dataはJSONオブジェクト
   private extractRscPayloadStrings(
     $: cheerio.CheerioAPI,
     translatable: string[],
@@ -37,50 +63,62 @@ export class HtmlProcessor {
   ): void {
     $('script[data-rsc-payload]').each((scriptIndex, elem) => {
       const content = $(elem).html() || '';
-      // Extract all Japanese-containing string segments from the RSC payload
-      // RSC flight data has text chunks like: T<hex_id>:<length>,<text>
-      // We look for string values that contain CJK characters (Japanese/Chinese/Korean)
-      const cjkPattern = /[\u3000-\u9FFF\uF900-\uFAFF]/;
+      const cjkStrings = new Set<string>();
 
-      // Extract quoted strings from JSON-like payload that contain CJK text
-      // The RSC payload is a string inside self.__next_f.push([1,"..."])
-      // We match segments of text between RSC protocol markers
-      const rscStrings: string[] = [];
+      // self.__next_f.push([type, data]) の引数部分を抽出
+      // self.__next_f.push([...]) の引数を抽出（最後の ) まで greedy でマッチ）
+      const pushMatch = content.match(/self\.__next_f\.push\(([\s\S]*)\)\s*$/);
+      if (!pushMatch) return;
 
-      // Match text segments in RSC payload: T<id>:<len>,<text>\n
-      // These are "text chunk" entries in the React Server Components wire format
-      const textChunkRegex = /T[0-9a-f]+:[0-9]+,([^\n]*)/g;
-      let match;
-      while ((match = textChunkRegex.exec(content)) !== null) {
-        const text = (match[1] ?? '').trim();
-        if (text && cjkPattern.test(text) && !this.rscStrings.has(text)) {
-          rscStrings.push(text);
-        }
+      let args: unknown;
+      try {
+        args = JSON.parse(pushMatch[1] ?? '');
+      } catch {
+        return;
       }
 
-      // Also scan for quoted string values in JSON-encoded RSC data
-      // that contain Japanese text
-      const jsonStringRegex = /"([^"\\]*(?:\\.[^"\\]*)*)"/g;
-      while ((match = jsonStringRegex.exec(content)) !== null) {
-        const raw = match[1] ?? '';
-        let text: string = raw;
-        try {
-          text = JSON.parse(`"${raw}"`);
-        } catch {
-          // keep raw
+      if (!Array.isArray(args) || args.length < 2) return;
+
+      const type = args[0];
+      const data = args[1];
+
+      if (type === 1 && typeof data === 'string') {
+        // RSCフライトデータ文字列: 各行が "id:json\n" の形式
+        // 各行をパースしてJSONオブジェクト内のCJK文字列を収集
+        const lines = data.split('\n');
+        for (const line of lines) {
+          // "id:json" の形式
+          const colonIdx = line.indexOf(':');
+          if (colonIdx === -1) continue;
+          const jsonPart = line.slice(colonIdx + 1).trim();
+          if (!jsonPart || !this.hasCjk(jsonPart)) continue;
+
+          try {
+            const parsed = JSON.parse(jsonPart);
+            this.collectCjkStrings(parsed, cjkStrings);
+          } catch {
+            // JSONでない場合は文字列そのものをチェック
+            if (this.hasCjk(jsonPart)) {
+              cjkStrings.add(jsonPart.trim());
+            }
+          }
         }
-        if (text && cjkPattern.test(text) && !this.rscStrings.has(text) && text.length > 1) {
-          rscStrings.push(text);
-        }
+      } else {
+        // type=0など: data自体がJSON値
+        this.collectCjkStrings(data, cjkStrings);
       }
 
-      // Add unique strings to translatable list
-      rscStrings.forEach((text, i) => {
-        const key = `__RSC_STR_${scriptIndex}_${i}__`;
-        this.rscStrings.set(text, key);
-        translatable.push(text);
-        mapping.set(key, text);
-      });
+      // 収集した文字列を翻訳リストに追加
+      let i = 0;
+      for (const text of cjkStrings) {
+        if (!this.rscStrings.has(text)) {
+          const key = `__RSC_STR_${scriptIndex}_${i}__`;
+          this.rscStrings.set(text, key);
+          translatable.push(text);
+          mapping.set(key, text);
+          i++;
+        }
+      }
     });
   }
 
@@ -490,34 +528,106 @@ export class HtmlProcessor {
     });
   }
 
+  // 値を再帰的に走査して翻訳を適用する
+  private translateValue(value: unknown, translations: Record<string, string>): unknown {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      // rscStringsのmapからkeyを逆引きして翻訳を取得
+      const key = this.rscStrings.get(trimmed);
+      if (key && translations[key] && translations[key] !== trimmed) {
+        // 前後の空白を保持しつつ翻訳を適用
+        return value.replace(trimmed, translations[key]);
+      }
+      return value;
+    } else if (Array.isArray(value)) {
+      return value.map(item => this.translateValue(item, translations));
+    } else if (value !== null && typeof value === 'object') {
+      const result: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        result[k] = this.translateValue(v, translations);
+      }
+      return result;
+    }
+    return value;
+  }
+
   private applyRscPayloadTranslations(
     $: cheerio.CheerioAPI,
     translations: Record<string, string>
   ): void {
+    // 翻訳対象の文字列がなければスキップ
+    if (this.rscStrings.size === 0) {
+      $('script[data-rsc-payload]').each((_, elem) => {
+        $(elem).removeAttr('data-rsc-payload');
+      });
+      return;
+    }
+
     $('script[data-rsc-payload]').each((_, elem) => {
       const $elem = $(elem);
-      let content = $elem.html() || '';
+      const content = $elem.html() || '';
 
-      // Apply translations for each RSC string we extracted
-      for (const [originalText, key] of this.rscStrings.entries()) {
-        const translated = translations[key];
-        if (!translated || translated === originalText) continue;
-
-        // Replace in raw content - need to handle JSON-encoded versions too
-        // Direct replacement for text chunk format
-        content = content.split(originalText).join(translated);
-
-        // Also handle JSON-escaped version
-        const jsonEncoded = JSON.stringify(originalText).slice(1, -1);
-        const jsonTranslated = JSON.stringify(translated).slice(1, -1);
-        if (jsonEncoded !== originalText) {
-          content = content.split(jsonEncoded).join(jsonTranslated);
-        }
+      // self.__next_f.push([...]) の引数を抽出（最後の ) まで greedy でマッチ）
+      const pushMatch = content.match(/self\.__next_f\.push\(([\s\S]*)\)\s*$/);
+      if (!pushMatch) {
+        $elem.removeAttr('data-rsc-payload');
+        return;
       }
 
-      // Remove the marker attribute and set translated content
+      let args: unknown;
+      try {
+        args = JSON.parse(pushMatch[1] ?? '');
+      } catch {
+        $elem.removeAttr('data-rsc-payload');
+        return;
+      }
+
+      if (!Array.isArray(args) || args.length < 2) {
+        $elem.removeAttr('data-rsc-payload');
+        return;
+      }
+
+      const type = args[0];
+      const data = args[1];
+
+      let newContent: string;
+
+      if (type === 1 && typeof data === 'string') {
+        // RSCフライトデータ: 各行をパース→翻訳→再シリアライズ
+        const lines = data.split('\n');
+        const translatedLines = lines.map(line => {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx === -1) return line;
+          const id = line.slice(0, colonIdx);
+          const jsonPart = line.slice(colonIdx + 1).trim();
+          if (!jsonPart || !this.hasCjk(jsonPart)) return line;
+
+          try {
+            const parsed = JSON.parse(jsonPart);
+            const translated = this.translateValue(parsed, translations);
+            return `${id}:${JSON.stringify(translated)}`;
+          } catch {
+            // JSONでない行はそのまま文字列置換
+            let result = jsonPart;
+            for (const [originalText, key] of this.rscStrings.entries()) {
+              const tr = translations[key];
+              if (tr && tr !== originalText) {
+                result = result.split(originalText).join(tr);
+              }
+            }
+            return `${id}:${result}`;
+          }
+        });
+        const translatedData = translatedLines.join('\n');
+        newContent = `self.__next_f.push(${JSON.stringify([type, translatedData])})`;
+      } else {
+        // type=0など: data全体を翻訳
+        const translated = this.translateValue(data, translations);
+        newContent = `self.__next_f.push(${JSON.stringify([type, translated])})`;
+      }
+
       $elem.removeAttr('data-rsc-payload');
-      $elem.html(content);
+      $elem.html(newContent);
     });
   }
 
