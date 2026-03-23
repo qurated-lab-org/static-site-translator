@@ -5,11 +5,14 @@ export class HtmlProcessor {
   private config: TranslatorConfig;
   private placeholderMap: Map<string, string>;
   private placeholderIndex: number;
+  // RSC payload strings to translate: key -> original text
+  private rscStrings: Map<string, string>;
 
   constructor(config: TranslatorConfig) {
     this.config = config;
     this.placeholderMap = new Map();
     this.placeholderIndex = 0;
+    this.rscStrings = new Map();
   }
 
   private createPlaceholder(content: string): string {
@@ -26,6 +29,71 @@ export class HtmlProcessor {
     return result;
   }
 
+  // Extract translatable text strings from Next.js RSC payload scripts
+  private extractRscPayloadStrings(
+    $: cheerio.CheerioAPI,
+    translatable: string[],
+    mapping: Map<string, string>
+  ): void {
+    $('script[data-rsc-payload]').each((scriptIndex, elem) => {
+      const content = $(elem).html() || '';
+      // Extract all Japanese-containing string segments from the RSC payload
+      // RSC flight data has text chunks like: T<hex_id>:<length>,<text>
+      // We look for string values that contain CJK characters (Japanese/Chinese/Korean)
+      const cjkPattern = /[\u3000-\u9FFF\uF900-\uFAFF]/;
+
+      // Extract quoted strings from JSON-like payload that contain CJK text
+      // The RSC payload is a string inside self.__next_f.push([1,"..."])
+      // We match segments of text between RSC protocol markers
+      const rscStrings: string[] = [];
+
+      // Match text segments in RSC payload: T<id>:<len>,<text>\n
+      // These are "text chunk" entries in the React Server Components wire format
+      const textChunkRegex = /T[0-9a-f]+:[0-9]+,([^\n]*)/g;
+      let match;
+      while ((match = textChunkRegex.exec(content)) !== null) {
+        const text = (match[1] ?? '').trim();
+        if (text && cjkPattern.test(text) && !this.rscStrings.has(text)) {
+          rscStrings.push(text);
+        }
+      }
+
+      // Also scan for quoted string values in JSON-encoded RSC data
+      // that contain Japanese text
+      const jsonStringRegex = /"([^"\\]*(?:\\.[^"\\]*)*)"/g;
+      while ((match = jsonStringRegex.exec(content)) !== null) {
+        const raw = match[1] ?? '';
+        let text: string = raw;
+        try {
+          text = JSON.parse(`"${raw}"`);
+        } catch {
+          // keep raw
+        }
+        if (text && cjkPattern.test(text) && !this.rscStrings.has(text) && text.length > 1) {
+          rscStrings.push(text);
+        }
+      }
+
+      // Add unique strings to translatable list
+      rscStrings.forEach((text, i) => {
+        const key = `__RSC_STR_${scriptIndex}_${i}__`;
+        this.rscStrings.set(text, key);
+        translatable.push(text);
+        mapping.set(key, text);
+      });
+    });
+  }
+
+  // data-no-translate属性を持つ要素をプレースホルダーに置換する
+  private protectNoTranslateElements($: cheerio.CheerioAPI): void {
+    $('[data-no-translate]').each((_, elem) => {
+      const $elem = $(elem);
+      const outerHtml = $.html($elem);
+      const placeholder = this.createPlaceholder(outerHtml);
+      $elem.replaceWith(placeholder);
+    });
+  }
+
   async extractTranslatableContent(html: string): Promise<{
     translatable: string[];
     mapping: Map<string, string>;
@@ -38,12 +106,19 @@ export class HtmlProcessor {
     // Reset for each HTML file
     this.placeholderMap.clear();
     this.placeholderIndex = 0;
+    this.rscStrings.clear();
 
     // Replace elements that should not be translated with placeholders
+    // Note: Next.js RSC payload scripts (self.__next_f.push) are handled separately
     if (this.config.safety?.preserveScripts !== false) {
       $('script').each((_, elem) => {
         const $elem = $(elem);
         const content = $elem.html() || '';
+        // RSC payload scripts need special handling - mark them but don't protect yet
+        if (content.includes('self.__next_f.push')) {
+          $elem.attr('data-rsc-payload', 'true');
+          return; // skip placeholder for now
+        }
         const placeholder = this.createPlaceholder(`<script${this.getAttributes($elem)}>` + content + '</script>');
         $elem.replaceWith(placeholder);
       });
@@ -67,6 +142,9 @@ export class HtmlProcessor {
         $elem.replaceWith(placeholder);
       });
     }
+
+    // Protect elements marked with data-no-translate attribute
+    this.protectNoTranslateElements($);
 
     // Extract translatable text from title
     const title = $('title').text();
@@ -191,6 +269,9 @@ export class HtmlProcessor {
 
     // Extract block-level elements with their innerHTML (NEW APPROACH)
     this.extractBlockElements($, $('body'), translatable, mapping);
+
+    // Extract text strings from Next.js RSC payload scripts
+    this.extractRscPayloadStrings($, translatable, mapping);
 
     // Return processed HTML with placeholders
     const processedHtml = $.html();
@@ -372,6 +453,9 @@ export class HtmlProcessor {
     // Apply block-level element translations (NEW APPROACH)
     this.applyBlockTranslations($, translations);
 
+    // Apply translations to Next.js RSC payload scripts
+    this.applyRscPayloadTranslations($, translations);
+
     // Add hreflang tags if enabled
     if (this.config.seo?.injectHreflang !== false) {
       this.injectHreflangTags($, targetLanguage);
@@ -403,6 +487,37 @@ export class HtmlProcessor {
         // Remove the data attribute after translation
         $elem.removeAttr('data-translate-key');
       }
+    });
+  }
+
+  private applyRscPayloadTranslations(
+    $: cheerio.CheerioAPI,
+    translations: Record<string, string>
+  ): void {
+    $('script[data-rsc-payload]').each((_, elem) => {
+      const $elem = $(elem);
+      let content = $elem.html() || '';
+
+      // Apply translations for each RSC string we extracted
+      for (const [originalText, key] of this.rscStrings.entries()) {
+        const translated = translations[key];
+        if (!translated || translated === originalText) continue;
+
+        // Replace in raw content - need to handle JSON-encoded versions too
+        // Direct replacement for text chunk format
+        content = content.split(originalText).join(translated);
+
+        // Also handle JSON-escaped version
+        const jsonEncoded = JSON.stringify(originalText).slice(1, -1);
+        const jsonTranslated = JSON.stringify(translated).slice(1, -1);
+        if (jsonEncoded !== originalText) {
+          content = content.split(jsonEncoded).join(jsonTranslated);
+        }
+      }
+
+      // Remove the marker attribute and set translated content
+      $elem.removeAttr('data-rsc-payload');
+      $elem.html(content);
     });
   }
 
