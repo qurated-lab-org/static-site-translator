@@ -41,12 +41,18 @@ Critical Rules:
 5. Example: "<a href='/login'>Login here</a>" → "<a href='/login'>ここでログイン</a>"
 6. Example: "Click <b>here</b> to continue." → "続けるには<b>こちら</b>をクリックしてください。"
 7. Maintain the original tone and style of the content
-8. Do not translate technical terms that should remain in English (like brand names, unless specified in glossary)
+8. Do NOT translate the following — leave them exactly as-is:
+   - Proper nouns: person names, place names, organization names
+   - Brand names and product names
+   - Words written in ALL CAPS that function as labels, titles, or identifiers (e.g. "VIOLINIST", "ARTIST", "PRODUCER")
+   - Technical terms, job titles used as identifiers, and terms that appear to be used as category labels rather than common words
+   - Any term explicitly listed in the glossary with the same value as the original
 9. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
 10. Preserve any HTML entities or special characters exactly as they appear
 11. Keep translations natural and culturally appropriate for ${targetLanguage}
-12. IMPORTANT: Return a JSON object with a "translations" array containing translations IN THE EXACT SAME ORDER as the input array
-13. The number of translations MUST equal the number of input texts`;
+12. When in doubt whether a word should be translated, prefer leaving it as-is rather than guessing
+13. IMPORTANT: Return a JSON object with a "translations" array containing translations IN THE EXACT SAME ORDER as the input array
+14. The number of translations MUST equal the number of input texts`;
 
     const userPrompt = `Translate the following ${texts.length} texts to ${targetLanguage}.
 
@@ -102,16 +108,9 @@ ${JSON.stringify(texts, null, 2)}`;
             throw new Error('Response missing "translations" array or translations is not an array');
           }
 
-          // Validate array length
+          // Validate array length - retry instead of padding with originals
           if (parsed.translations.length !== texts.length) {
-            console.warn(`Translation count mismatch: expected ${texts.length}, got ${parsed.translations.length}`);
-            // Pad with original texts if needed
-            while (parsed.translations.length < texts.length) {
-              const missingIndex = parsed.translations.length;
-              const originalText = texts[missingIndex] || '';
-              parsed.translations.push(originalText);
-              console.warn(`Added missing translation at index ${missingIndex}: ${originalText}`);
-            }
+            throw new Error(`Translation count mismatch: expected ${texts.length}, got ${parsed.translations.length}`);
           }
         } catch (parseError) {
           console.error('Failed to parse JSON response:', content);
@@ -128,14 +127,14 @@ ${JSON.stringify(texts, null, 2)}`;
       } catch (error: any) {
         retries++;
 
-        // Check if it's a rate limit error
-        if (error?.status === 429 || error?.code === 'rate_limit_exceeded') {
-          if (retries < maxRetries) {
-            const waitTime = Math.min(1000 * Math.pow(2, retries), 10000); // Exponential backoff
-            console.warn(`Rate limit hit, waiting ${waitTime}ms before retry ${retries}/${maxRetries}...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-            continue;
-          }
+        if (retries < maxRetries) {
+          const isRateLimit = error?.status === 429 || error?.code === 'rate_limit_exceeded';
+          const waitTime = isRateLimit
+            ? Math.min(1000 * Math.pow(2, retries), 10000)
+            : 500;
+          console.warn(`Translation failed (attempt ${retries}/${maxRetries}): ${error instanceof Error ? error.message : 'Unknown error'}. Retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
         }
 
         console.error('Translation API error:', error);
@@ -153,7 +152,7 @@ ${JSON.stringify(texts, null, 2)}`;
     mapping: Map<string, string>
   ): Promise<Record<string, string>> {
     const uniqueTexts = Array.from(new Set(texts));
-    const batchSize = 20; // Reduced batch size for better translation quality
+    const batchSize = 10; // Smaller batch size to reduce count mismatch errors
     const translatedTexts: Record<string, string> = {};
 
     for (let i = 0; i < uniqueTexts.length; i += batchSize) {
