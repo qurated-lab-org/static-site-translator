@@ -328,7 +328,8 @@ export class HtmlProcessor {
       'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'li', 'td', 'th', 'dt', 'dd',
       'blockquote', 'figcaption', 'caption',
-      'label', 'legend', 'summary'
+      'label', 'legend', 'summary',
+      'button',
     ];
 
     const blockSelector = blockElements.join(',');
@@ -367,6 +368,30 @@ export class HtmlProcessor {
       mapping.set(key, innerHTML);
 
       // Mark this element with data attribute for later replacement
+      $elem.attr('data-translate-key', key);
+    });
+
+    // Also translate standalone <a> elements that are not already inside a block element
+    // (e.g. CTA buttons like <a class="btn-tour-apply">ツアーを申し込む</a>)
+    element.find('a').each((index, elem) => {
+      const $elem = $(elem);
+
+      // Skip if already marked
+      if ($elem.attr('data-translate-key')) return;
+
+      // Skip if inside a block element (already covered above)
+      if ($elem.closest(blockSelector).length > 0) return;
+
+      const innerHTML = $elem.html();
+      if (!innerHTML) return;
+
+      const textContent = $elem.text().trim();
+      if (!textContent || textContent.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
+      if (innerHTML.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
+
+      const key = `__BLOCK_${translatable.length}__`;
+      translatable.push(innerHTML);
+      mapping.set(key, innerHTML);
       $elem.attr('data-translate-key', key);
     });
   }
