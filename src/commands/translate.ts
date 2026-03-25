@@ -110,6 +110,7 @@ export async function translateCommand(options: {
                 htmlContent,
                 allCached[idx] ?? null,
                 extracted,
+                sharedProcessor,
                 config,
                 translator,
                 cacheManager,
@@ -173,6 +174,7 @@ async function translateFileWithExtracted(
   htmlContent: string,
   cachedTranslation: string | null,
   extracted: { translatable: string[]; mapping: Map<string, string>; processedHtml: string } | null,
+  sharedProcessor: HtmlProcessor,
   config: TranslatorConfig,
   translator: Translator,
   cacheManager: CacheManager,
@@ -193,12 +195,9 @@ async function translateFileWithExtracted(
       return { source: sourcePath, target: targetPath, language: targetLanguage, success: true };
     }
 
-    // Each language needs its own HtmlProcessor instance for applyTranslations (stateful)
-    const htmlProcessor = new HtmlProcessor(config);
-
     if (!extracted || extracted.translatable.length === 0) {
-      const { processedHtml } = extracted || await htmlProcessor.extractTranslatableContent(htmlContent);
-      const translatedHtml = await htmlProcessor.applyTranslations(processedHtml, {}, targetLanguage);
+      const { processedHtml } = extracted || await sharedProcessor.extractTranslatableContent(htmlContent);
+      const translatedHtml = await sharedProcessor.applyTranslations(processedHtml, {}, targetLanguage);
       await fs.ensureDir(path.dirname(targetPath));
       await fs.writeFile(targetPath, translatedHtml, 'utf-8');
       return { source: sourcePath, target: targetPath, language: targetLanguage, success: true };
@@ -208,8 +207,7 @@ async function translateFileWithExtracted(
 
     const translations = await translator.translateTexts(translatable, targetLanguage, mapping);
 
-    // applyTranslations needs its own HtmlProcessor since it has internal state
-    const translatedHtml = await htmlProcessor.applyTranslations(processedHtml, translations, targetLanguage);
+    const translatedHtml = await sharedProcessor.applyTranslations(processedHtml, translations, targetLanguage);
 
     await fs.ensureDir(path.dirname(targetPath));
     await fs.writeFile(targetPath, translatedHtml, 'utf-8');
