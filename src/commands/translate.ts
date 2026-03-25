@@ -62,7 +62,6 @@ export async function translateCommand(options: {
 
     // Initialize translator
     const translator = new Translator(config);
-    const htmlProcessor = new HtmlProcessor(config);
 
     // Set up parallel processing
     const limit = pLimit(config.parallel?.limit || 5);
@@ -84,53 +83,68 @@ export async function translateCommand(options: {
 
     const tasks = [];
     for (const htmlFile of htmlFiles) {
-      for (const targetLanguage of config.targetLanguages) {
-        tasks.push(
-          limit(async () => {
-            // HtmlProcessorはステートフルなので各タスクで新しいインスタンスを使う
-            const fileProcessor = new HtmlProcessor(config);
-            const result = await translateFile(
-              htmlFile,
-              targetLanguage,
-              sourceDir,
-              config,
-              translator,
-              fileProcessor,
-              cacheManager,
-              options.verbose || false
-            );
-            results.push(result);
+      tasks.push(
+        limit(async () => {
+          const sourcePath = path.join(sourceDir, htmlFile);
+          const htmlContent = await fs.readFile(sourcePath, 'utf-8');
 
-            if (result.success) {
-              stats.successfulFiles++;
-              if (result.tokensUsed) {
-                stats.totalTokens += result.tokensUsed;
+          // Parse HTML once, then translate for all languages in parallel
+          const sharedProcessor = new HtmlProcessor(config);
+          let extracted: { translatable: string[]; mapping: Map<string, string>; processedHtml: string } | null = null;
+
+          // Check if all languages are cached (skip parsing if so)
+          const allCached = await Promise.all(
+            config.targetLanguages.map(lang => cacheManager.get(htmlFile, htmlContent, lang).then(v => v ?? null))
+          );
+
+          if (!allCached.every(Boolean)) {
+            extracted = await sharedProcessor.extractTranslatableContent(htmlContent);
+          }
+
+          await Promise.all(
+            config.targetLanguages.map(async (targetLanguage, idx) => {
+              const result = await translateFileWithExtracted(
+                htmlFile,
+                targetLanguage,
+                sourceDir,
+                htmlContent,
+                allCached[idx] ?? null,
+                extracted,
+                config,
+                translator,
+                cacheManager,
+                options.verbose || false
+              );
+              results.push(result);
+
+              if (result.success) {
+                stats.successfulFiles++;
+                if (result.tokensUsed) stats.totalTokens += result.tokensUsed;
+              } else {
+                stats.failedFiles++;
               }
-            } else {
-              stats.failedFiles++;
-            }
 
-            // Update progress
-            const progress = Math.round(
-              ((stats.successfulFiles + stats.failedFiles) / stats.totalFiles) * 100
-            );
+              const progress = Math.round(
+                ((stats.successfulFiles + stats.failedFiles) / stats.totalFiles) * 100
+              );
 
-            if (result.success) {
-              console.log(
-                chalk.green('✓') +
-                ` ${chalk.gray(htmlFile)} → ${chalk.cyan(targetLanguage)} ` +
-                chalk.gray(`(${progress}%)`)
-              );
-            } else {
-              console.log(
-                chalk.red('✗') +
-                ` ${chalk.gray(htmlFile)} → ${chalk.cyan(targetLanguage)} ` +
-                chalk.red(`Failed: ${result.error}`)
-              );
-            }
-          })
-        );
-      }
+              if (result.success) {
+                console.log(
+                  chalk.green('✓') +
+                  ` ${chalk.gray(htmlFile)} → ${chalk.cyan(targetLanguage)} ` +
+                  chalk.gray(`(${progress}%)`)
+                );
+              } else {
+                console.log(
+                  chalk.red('✗') +
+                  ` ${chalk.gray(htmlFile)} → ${chalk.cyan(targetLanguage)} ` +
+                  chalk.red(`Failed: ${result.error}`)
+                );
+              }
+            })
+          );
+        })
+      );
     }
 
     // Wait for all translations to complete
@@ -152,36 +166,23 @@ export async function translateCommand(options: {
   }
 }
 
-async function translateFile(
+async function translateFileWithExtracted(
   htmlFile: string,
   targetLanguage: string,
   sourceDir: string,
+  htmlContent: string,
+  cachedTranslation: string | null,
+  extracted: { translatable: string[]; mapping: Map<string, string>; processedHtml: string } | null,
   config: TranslatorConfig,
   translator: Translator,
-  htmlProcessor: HtmlProcessor,
   cacheManager: CacheManager,
   verbose: boolean
 ): Promise<FileTranslationResult> {
   const sourcePath = path.join(sourceDir, htmlFile);
-  const targetPath = path.join(
-    config.outputDir,
-    targetLanguage,
-    htmlFile
-  );
+  const targetPath = path.join(config.outputDir, targetLanguage, htmlFile);
 
   try {
-    // Read source file
-    const htmlContent = await fs.readFile(sourcePath, 'utf-8');
-
-    // Check cache
-    const cachedTranslation = await cacheManager.get(
-      htmlFile,
-      htmlContent,
-      targetLanguage
-    );
-
     if (cachedTranslation) {
-      // Use cached translation
       await fs.ensureDir(path.dirname(targetPath));
       await fs.writeFile(targetPath, cachedTranslation, 'utf-8');
 
@@ -189,55 +190,30 @@ async function translateFile(
         console.log(chalk.blue(`  [CACHE] ${htmlFile} → ${targetLanguage}`));
       }
 
-      return {
-        source: sourcePath,
-        target: targetPath,
-        language: targetLanguage,
-        success: true,
-      };
+      return { source: sourcePath, target: targetPath, language: targetLanguage, success: true };
     }
 
-    // Extract translatable content
-    const { translatable, mapping, processedHtml } = await htmlProcessor.extractTranslatableContent(htmlContent);
+    // Each language needs its own HtmlProcessor instance for applyTranslations (stateful)
+    const htmlProcessor = new HtmlProcessor(config);
 
-    if (translatable.length === 0) {
-      // No content to translate, but still apply language changes
-      const translatedHtml = await htmlProcessor.applyTranslations(
-        processedHtml,
-        {},
-        targetLanguage
-      );
-
+    if (!extracted || extracted.translatable.length === 0) {
+      const { processedHtml } = extracted || await htmlProcessor.extractTranslatableContent(htmlContent);
+      const translatedHtml = await htmlProcessor.applyTranslations(processedHtml, {}, targetLanguage);
       await fs.ensureDir(path.dirname(targetPath));
       await fs.writeFile(targetPath, translatedHtml, 'utf-8');
-
-      return {
-        source: sourcePath,
-        target: targetPath,
-        language: targetLanguage,
-        success: true,
-      };
+      return { source: sourcePath, target: targetPath, language: targetLanguage, success: true };
     }
 
-    // Translate content
-    const translations = await translator.translateTexts(
-      translatable,
-      targetLanguage,
-      mapping
-    );
+    const { translatable, mapping, processedHtml } = extracted;
 
-    // Apply translations to processed HTML (with placeholders)
-    const translatedHtml = await htmlProcessor.applyTranslations(
-      processedHtml,
-      translations,
-      targetLanguage
-    );
+    const translations = await translator.translateTexts(translatable, targetLanguage, mapping);
 
-    // Save translated file
+    // applyTranslations needs its own HtmlProcessor since it has internal state
+    const translatedHtml = await htmlProcessor.applyTranslations(processedHtml, translations, targetLanguage);
+
     await fs.ensureDir(path.dirname(targetPath));
     await fs.writeFile(targetPath, translatedHtml, 'utf-8');
 
-    // Update cache
     await cacheManager.set(htmlFile, htmlContent, targetLanguage, translatedHtml);
 
     return {

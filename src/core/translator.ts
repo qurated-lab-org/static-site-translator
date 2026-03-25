@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import pLimit from 'p-limit';
 import { TranslatorConfig } from '../types';
 
 export class Translator {
@@ -152,25 +153,34 @@ ${JSON.stringify(texts, null, 2)}`;
     mapping: Map<string, string>
   ): Promise<Record<string, string>> {
     const uniqueTexts = Array.from(new Set(texts));
-    const batchSize = 10; // Smaller batch size to reduce count mismatch errors
+    const batchSize = 50;
     const translatedTexts: Record<string, string> = {};
 
+    const batches: string[][] = [];
     for (let i = 0; i < uniqueTexts.length; i += batchSize) {
-      const batch = uniqueTexts.slice(i, i + batchSize);
-
-      // Determine context based on keys
-      const context: any = {};
-      for (const [key, value] of mapping.entries()) {
-        if (batch.includes(value)) {
-          if (key === '__TITLE__') context.isTitle = true;
-          if (key.startsWith('__META_')) context.isMeta = true;
-          if (key.startsWith('__BLOCK_')) context.isHtmlBlock = true;
-        }
-      }
-
-      const batchTranslations = await this.translateBatch(batch, targetLanguage, context);
-      Object.assign(translatedTexts, batchTranslations);
+      batches.push(uniqueTexts.slice(i, i + batchSize));
     }
+
+    // Process batches in parallel (up to 5 concurrent API calls)
+    const batchLimit = pLimit(5);
+    await Promise.all(
+      batches.map((batch) =>
+        batchLimit(async () => {
+          // Determine context based on keys
+          const context: any = {};
+          for (const [key, value] of mapping.entries()) {
+            if (batch.includes(value)) {
+              if (key === '__TITLE__') context.isTitle = true;
+              if (key.startsWith('__META_')) context.isMeta = true;
+              if (key.startsWith('__BLOCK_')) context.isHtmlBlock = true;
+            }
+          }
+
+          const batchTranslations = await this.translateBatch(batch, targetLanguage, context);
+          Object.assign(translatedTexts, batchTranslations);
+        })
+      )
+    );
 
     // Map back using original keys
     const result: Record<string, string> = {};
