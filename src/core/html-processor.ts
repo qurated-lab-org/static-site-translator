@@ -545,6 +545,11 @@ export class HtmlProcessor {
     // Inject dynamic translations map for runtime use
     this.injectDynamicTranslationsScript($, translations);
 
+    // Rewrite internal links for non-Japanese pages (e.g. /spots/ -> /en/spots/)
+    if (targetLanguage !== 'ja') {
+      this.rewriteInternalLinks($, targetLanguage);
+    }
+
     // Add hreflang tags if enabled
     if (this.config.seo?.injectHreflang !== false) {
       this.injectHreflangTags($, targetLanguage);
@@ -864,6 +869,42 @@ export class HtmlProcessor {
 
     const script = `<script id="__dynamic_translations__">window.__dynamicTranslations=window.__dynamicTranslations||{};Object.assign(window.__dynamicTranslations,${JSON.stringify(map)});</script>`;
     $('body').append(script);
+  }
+
+  private rewriteInternalLinks($: cheerio.CheerioAPI, targetLanguage: string): void {
+    const prefix = `/${targetLanguage}`;
+
+    // Rewrite href attributes on <a> tags
+    $('a[href]').each((_, elem) => {
+      const $elem = $(elem);
+      const href = $elem.attr('href') || '';
+
+      // Only rewrite absolute internal paths (starting with /) that don't already have the prefix
+      if (
+        href.startsWith('/') &&
+        !href.startsWith(`/${targetLanguage}/`) &&
+        href !== `/${targetLanguage}` &&
+        !href.startsWith('//') &&
+        !href.startsWith('/assets/') &&
+        !href.startsWith('/favicon')
+      ) {
+        $elem.attr('href', prefix + (href === '/' ? '/' : href));
+      }
+    });
+
+    // Rewrite og:url meta tag
+    const ogUrl = $('meta[property="og:url"]').attr('content');
+    if (ogUrl) {
+      try {
+        const url = new URL(ogUrl);
+        if (!url.pathname.startsWith(prefix)) {
+          url.pathname = prefix + url.pathname;
+          $('meta[property="og:url"]').attr('content', url.toString());
+        }
+      } catch {
+        // skip invalid URLs
+      }
+    }
   }
 
   private injectHreflangTags($: cheerio.CheerioAPI, currentLanguage: string): void {
