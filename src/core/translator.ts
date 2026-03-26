@@ -153,7 +153,7 @@ ${JSON.stringify(texts, null, 2)}`;
     mapping: Map<string, string>
   ): Promise<Record<string, string>> {
     const uniqueTexts = Array.from(new Set(texts));
-    const batchSize = 50;
+    const batchSize = 30;
     const translatedTexts: Record<string, string> = {};
 
     const batches: string[][] = [];
