@@ -16,7 +16,7 @@ export class Translator {
 
     this.openai = new OpenAI({
       apiKey: config.openaiApiKey,
-      timeout: 60000, // 60 second timeout per request
+      timeout: 120000, // 120 second timeout per request
     });
   }
 
@@ -159,7 +159,7 @@ ${JSON.stringify(texts, null, 2)}`;
     mapping: Map<string, string>
   ): Promise<Record<string, string>> {
     const uniqueTexts = Array.from(new Set(texts));
-    const batchSize = 30;
+    const batchSize = 15;
     const translatedTexts: Record<string, string> = {};
 
     const batches: string[][] = [];
