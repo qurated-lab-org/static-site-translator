@@ -7,12 +7,15 @@ export class HtmlProcessor {
   private placeholderIndex: number;
   // RSC payload strings to translate: key -> original text
   private rscStrings: Map<string, string>;
+  // Dynamic translation texts: original -> key
+  private dynamicTexts: Map<string, string>;
 
   constructor(config: TranslatorConfig) {
     this.config = config;
     this.placeholderMap = new Map();
     this.placeholderIndex = 0;
     this.rscStrings = new Map();
+    this.dynamicTexts = new Map();
   }
 
   private createPlaceholder(content: string): string {
@@ -122,6 +125,22 @@ export class HtmlProcessor {
     });
   }
 
+  // data-translate-dynamic属性を持つ要素のテキストを収集する
+  private extractDynamicTranslations(
+    $: cheerio.CheerioAPI,
+    translatable: string[],
+    mapping: Map<string, string>
+  ): void {
+    $('[data-translate-dynamic]').each((index, elem) => {
+      const text = $(elem).text().trim();
+      if (!text || this.dynamicTexts.has(text)) return;
+      const key = `__DYNAMIC_${index}__`;
+      this.dynamicTexts.set(text, key);
+      translatable.push(text);
+      mapping.set(key, text);
+    });
+  }
+
   // data-no-translate属性を持つ要素をプレースホルダーに置換する
   private protectNoTranslateElements($: cheerio.CheerioAPI): void {
     $('[data-no-translate]').each((_, elem) => {
@@ -145,6 +164,7 @@ export class HtmlProcessor {
     this.placeholderMap.clear();
     this.placeholderIndex = 0;
     this.rscStrings.clear();
+    this.dynamicTexts.clear();
 
     // Replace elements that should not be translated with placeholders
     // Note: Next.js RSC payload scripts (self.__next_f.push) are handled separately
@@ -310,6 +330,9 @@ export class HtmlProcessor {
 
     // Extract text strings from Next.js RSC payload scripts
     this.extractRscPayloadStrings($, translatable, mapping);
+
+    // Extract texts from data-translate-dynamic elements for runtime translation map
+    this.extractDynamicTranslations($, translatable, mapping);
 
     // Return processed HTML with placeholders
     const processedHtml = $.html();
@@ -518,6 +541,9 @@ export class HtmlProcessor {
 
     // Apply translations to Next.js RSC payload scripts
     this.applyRscPayloadTranslations($, translations);
+
+    // Inject dynamic translations map for runtime use
+    this.injectDynamicTranslationsScript($, translations);
 
     // Add hreflang tags if enabled
     if (this.config.seo?.injectHreflang !== false) {
@@ -818,6 +844,26 @@ export class HtmlProcessor {
       }
     });
     return textIndex;
+  }
+
+  private injectDynamicTranslationsScript(
+    $: cheerio.CheerioAPI,
+    translations: Record<string, string>
+  ): void {
+    if (this.dynamicTexts.size === 0) return;
+
+    const map: Record<string, string> = {};
+    for (const [originalText, key] of this.dynamicTexts.entries()) {
+      const translated = translations[key];
+      if (translated && translated !== originalText) {
+        map[originalText] = translated;
+      }
+    }
+
+    if (Object.keys(map).length === 0) return;
+
+    const script = `<script id="__dynamic_translations__">window.__dynamicTranslations=window.__dynamicTranslations||{};Object.assign(window.__dynamicTranslations,${JSON.stringify(map)});</script>`;
+    $('body').append(script);
   }
 
   private injectHreflangTags($: cheerio.CheerioAPI, currentLanguage: string): void {
