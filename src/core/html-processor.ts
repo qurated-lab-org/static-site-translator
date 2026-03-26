@@ -363,6 +363,21 @@ export class HtmlProcessor {
 
     const blockSelector = blockElements.join(',');
 
+    // Also translate elements explicitly marked with data-translate attribute
+    element.find('[data-translate]').each((index, elem) => {
+      const $elem = $(elem);
+      if ($elem.attr('data-translate-key')) return;
+      const innerHTML = $elem.html();
+      if (!innerHTML) return;
+      const textContent = $elem.text().trim();
+      if (!textContent || textContent.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
+      if (innerHTML.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
+      const key = `__BLOCK_${translatable.length}__`;
+      translatable.push(innerHTML);
+      mapping.set(key, innerHTML);
+      $elem.attr('data-translate-key', key);
+    });
+
     element.find(blockSelector).each((index, elem) => {
       const $elem = $(elem);
 
@@ -590,9 +605,10 @@ export class HtmlProcessor {
       if (key && translations[key]) {
         // Replace innerHTML with translated HTML
         $elem.html(translations[key]);
-        // Remove the data attribute after translation
-        $elem.removeAttr('data-translate-key');
       }
+      // Remove the data attributes after translation
+      $elem.removeAttr('data-translate-key');
+      $elem.removeAttr('data-translate');
     });
   }
 
