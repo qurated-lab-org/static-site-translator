@@ -297,31 +297,37 @@ export class HtmlProcessor {
 
     // Extract translatable text from alt attributes
     $('img[alt]').each((index, elem) => {
-      const alt = $(elem).attr('alt');
+      const $elem = $(elem);
+      const alt = $elem.attr('alt');
       if (alt && alt.trim()) {
         const key = `__IMG_ALT_${index}__`;
         translatable.push(alt);
         mapping.set(key, alt);
+        $elem.attr('data-alt-key', key);
       }
     });
 
     // Extract translatable text from title attributes
     $('[title]').each((index, elem) => {
-      const titleAttr = $(elem).attr('title');
+      const $elem = $(elem);
+      const titleAttr = $elem.attr('title');
       if (titleAttr && titleAttr.trim()) {
         const key = `__TITLE_ATTR_${index}__`;
         translatable.push(titleAttr);
         mapping.set(key, titleAttr);
+        $elem.attr('data-title-key', key);
       }
     });
 
     // Extract translatable text from placeholder attributes
     $('[placeholder]').each((index, elem) => {
-      const placeholder = $(elem).attr('placeholder');
+      const $elem = $(elem);
+      const placeholder = $elem.attr('placeholder');
       if (placeholder && placeholder.trim()) {
-        const key = `__PLACEHOLDER_${index}__`;
+        const key = `__PLACEHOLDER_KEY_${index}__`;
         translatable.push(placeholder);
         mapping.set(key, placeholder);
+        $elem.attr('data-placeholder-key', key);
       }
     });
 
@@ -513,27 +519,33 @@ export class HtmlProcessor {
     });
 
     // Apply alt attribute translations
-    $('img[alt]').each((index, elem) => {
-      const key = `__IMG_ALT_${index}__`;
-      if (translations[key]) {
-        $(elem).attr('alt', translations[key]);
+    $('img[data-alt-key]').each((_, elem) => {
+      const $elem = $(elem);
+      const key = $elem.attr('data-alt-key');
+      if (key && translations[key]) {
+        $elem.attr('alt', translations[key]);
       }
+      $elem.removeAttr('data-alt-key');
     });
 
     // Apply title attribute translations
-    $('[title]').each((index, elem) => {
-      const key = `__TITLE_ATTR_${index}__`;
-      if (translations[key]) {
-        $(elem).attr('title', translations[key]);
+    $('[data-title-key]').each((_, elem) => {
+      const $elem = $(elem);
+      const key = $elem.attr('data-title-key');
+      if (key && translations[key]) {
+        $elem.attr('title', translations[key]);
       }
+      $elem.removeAttr('data-title-key');
     });
 
     // Apply placeholder attribute translations
-    $('[placeholder]').each((index, elem) => {
-      const key = `__PLACEHOLDER_${index}__`;
-      if (translations[key]) {
-        $(elem).attr('placeholder', translations[key]);
+    $('[data-placeholder-key]').each((_, elem) => {
+      const $elem = $(elem);
+      const key = $elem.attr('data-placeholder-key');
+      if (key && translations[key]) {
+        $elem.attr('placeholder', translations[key]);
       }
+      $elem.removeAttr('data-placeholder-key');
     });
 
     // Apply block-level element translations (NEW APPROACH)
