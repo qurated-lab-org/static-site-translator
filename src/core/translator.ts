@@ -16,6 +16,7 @@ export class Translator {
 
     this.openai = new OpenAI({
       apiKey: config.openaiApiKey,
+      timeout: 60000, // 60 second timeout per request
     });
   }
 
@@ -77,8 +78,9 @@ ${JSON.stringify(texts, null, 2)}`;
 
     while (retries < maxRetries) {
       try {
-        // Calculate appropriate max_tokens: input length * 10 for safety margin
-        const estimatedOutputTokens = Math.max(2000, texts.join('').length * 10);
+        // Calculate appropriate max_tokens based on input size
+        const inputLength = texts.join('').length;
+        const estimatedOutputTokens = Math.max(1000, Math.ceil(inputLength * 2.5));
         const maxTokens = Math.min(16000, estimatedOutputTokens);
 
         const response = await this.openai.chat.completions.create({
