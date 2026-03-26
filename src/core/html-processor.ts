@@ -433,6 +433,31 @@ export class HtmlProcessor {
       if (!textContent || textContent.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
       if (innerHTML.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
 
+      // Skip if the anchor contains placeholder(s) — means it has non-translatable
+      // children (e.g. <img data-no-translate>) that would confuse the translator
+      if (innerHTML.includes('__SKIP_PLACEHOLDER_')) return;
+
+      // Skip if the anchor contains block-level children (complex structure)
+      if ($elem.find(blockSelector).length > 0) return;
+      if ($elem.find('img,svg,picture').length > 0) return;
+
+      const key = `__BLOCK_${translatable.length}__`;
+      translatable.push(innerHTML);
+      mapping.set(key, innerHTML);
+      $elem.attr('data-translate-key', key);
+    });
+
+    // Also translate text-only <span> elements inside <a> that were skipped above
+    // (e.g. <span class="line-text">お問い合わせ</span>)
+    element.find('a span').each((index, elem) => {
+      const $elem = $(elem);
+      if ($elem.attr('data-translate-key')) return;
+      if ($elem.closest('[data-translate-key]').length > 0) return;
+      const text = $elem.text().trim();
+      if (!text || text.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
+      if ($elem.find(blockSelector).length > 0) return;
+      const innerHTML = $elem.html();
+      if (!innerHTML || innerHTML.includes('__SKIP_PLACEHOLDER_')) return;
       const key = `__BLOCK_${translatable.length}__`;
       translatable.push(innerHTML);
       mapping.set(key, innerHTML);
