@@ -109,9 +109,13 @@ ${JSON.stringify(texts, null, 2)}`;
             throw new Error('Response missing "translations" array or translations is not an array');
           }
 
-          // Validate array length - retry instead of padding with originals
+          // If count mismatches, pad with originals or truncate rather than failing
           if (parsed.translations.length !== texts.length) {
-            throw new Error(`Translation count mismatch: expected ${texts.length}, got ${parsed.translations.length}`);
+            console.warn(`Translation count mismatch: expected ${texts.length}, got ${parsed.translations.length}. Padding with originals.`);
+            while (parsed.translations.length < texts.length) {
+              parsed.translations.push(texts[parsed.translations.length] ?? '');
+            }
+            parsed.translations = parsed.translations.slice(0, texts.length);
           }
         } catch (parseError) {
           console.error('Failed to parse JSON response:', content);
