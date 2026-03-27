@@ -33,7 +33,7 @@
     "localization",
     "multilingual"
   ],
-  "author": "AI Static Translator Contributors",
+  "author": "Qurated Lab",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
@@ -41,12 +41,12 @@
   "packageManager": "pnpm@8.0.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/ai-static-translator.git"
+    "url": "git+https://github.com/qurated-lab-org/static-site-translator.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/ai-static-translator/issues"
+    "url": "https://github.com/qurated-lab-org/static-site-translator/issues"
   },
-  "homepage": "https://github.com/yourusername/ai-static-translator#readme",
+  "homepage": "https://github.com/qurated-lab-org/static-site-translator#readme",
   "dependencies": {
     "boxen": "^5.1.2",
     "chalk": "^4.1.2",
