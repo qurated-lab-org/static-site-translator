@@ -191,6 +191,15 @@ export class HtmlProcessor {
       });
     }
 
+    // Replace SVG elements with placeholders so they don't interfere with translation
+    // (SVG content is never translatable and confuses the AI when mixed with text)
+    $('svg').each((_, elem) => {
+      const $elem = $(elem);
+      const outer = $.html($elem);
+      const placeholder = this.createPlaceholder(outer);
+      $elem.replaceWith(placeholder);
+    });
+
     if (this.config.safety?.preserveCodeBlocks !== false) {
       $('pre, code').each((_, elem) => {
         const $elem = $(elem);
@@ -446,6 +455,24 @@ export class HtmlProcessor {
       translatable.push(innerHTML);
       mapping.set(key, innerHTML);
       $elem.attr('data-translate-key', key);
+    });
+
+    // Also translate direct text nodes inside <a> elements that were skipped
+    // because they contain SVG placeholders (e.g. LINE button with SVG icon + text)
+    element.find('a').each((index, elem) => {
+      const $elem = $(elem);
+      if ($elem.attr('data-translate-key')) return;
+      if ($elem.closest('[data-translate-key]').length > 0) return;
+      $elem.contents().each((_, node) => {
+        if (node.type !== 'text') return;
+        const text = $(node).text().trim();
+        if (!text || text.match(/^__SKIP_PLACEHOLDER_\d+__$/)) return;
+        const key = `__TEXT_${translatable.length}__`;
+        translatable.push(text);
+        mapping.set(key, text);
+        // Replace text node with a keyed placeholder span
+        $(node).replaceWith(`<span data-translate-key="${key}">${text}</span>`);
+      });
     });
 
     // Also translate text-only <span> elements inside <a> that were skipped above
