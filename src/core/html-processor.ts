@@ -356,7 +356,7 @@ export class HtmlProcessor {
     const blockElements = [
       'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'li', 'td', 'th', 'dt', 'dd',
-      'blockquote', 'figcaption', 'caption',
+      'blockquote', 'aside', 'figcaption', 'caption',
       'label', 'legend', 'summary',
       'button',
     ];
@@ -439,7 +439,8 @@ export class HtmlProcessor {
 
       // Skip if the anchor contains block-level children (complex structure)
       if ($elem.find(blockSelector).length > 0) return;
-      if ($elem.find('img,svg,picture').length > 0) return;
+      // Skip if contains img/picture (SVG is ok — it gets placeholder-replaced)
+      if ($elem.find('img,picture').length > 0) return;
 
       const key = `__BLOCK_${translatable.length}__`;
       translatable.push(innerHTML);
