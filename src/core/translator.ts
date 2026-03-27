@@ -52,7 +52,7 @@ Critical Rules:
 9. For SEO elements (titles, meta descriptions), optimize for the target language's search patterns
 10. Preserve any HTML entities or special characters exactly as they appear
 11. Keep translations natural and culturally appropriate for ${targetLanguage}
-12. When in doubt whether a word should be translated, prefer leaving it as-is rather than guessing
+12. ALWAYS translate Japanese words (hiragana, katakana, kanji) into ${targetLanguage}, even if they appear mid-sentence or seem like they could be proper nouns — unless they are explicitly in the glossary with the same value. Never leave Japanese characters untranslated in the output.
 13. IMPORTANT: Return a JSON object with a "translations" array containing translations IN THE EXACT SAME ORDER as the input array
 14. The number of translations MUST equal the number of input texts`;
 
