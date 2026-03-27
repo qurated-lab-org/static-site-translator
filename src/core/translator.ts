@@ -189,9 +189,15 @@ ${JSON.stringify(texts, null, 2)}`;
     );
 
     // Map back using original keys
+    // Apply glossary overrides directly for exact matches
+    const glossary = this.config.glossary?.[targetLanguage] as Record<string, string> | undefined;
     const result: Record<string, string> = {};
     for (const [key, originalText] of mapping.entries()) {
-      result[key] = translatedTexts[originalText] || originalText;
+      if (glossary && glossary[originalText]) {
+        result[key] = glossary[originalText];
+      } else {
+        result[key] = translatedTexts[originalText] || originalText;
+      }
     }
 
     return result;
