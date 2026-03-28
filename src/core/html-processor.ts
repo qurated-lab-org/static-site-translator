@@ -32,6 +32,12 @@ export class HtmlProcessor {
     return result;
   }
 
+  // ソース言語がCJK系かどうか（RSCペイロード処理の要否判定に使用）
+  private get isCjkSource(): boolean {
+    const src = this.config.sourceLanguage || 'ja';
+    return ['ja', 'zh', 'ko'].includes(src);
+  }
+
   // CJK文字（日本語・中国語・韓国語）を含む文字列かどうかを判定
   private hasCjk(text: string): boolean {
     return /[\u3000-\u9FFF\uF900-\uFAFF\uAC00-\uD7AF]/.test(text);
@@ -343,8 +349,10 @@ export class HtmlProcessor {
     // Extract block-level elements with their innerHTML (NEW APPROACH)
     this.extractBlockElements($, $('body'), translatable, mapping);
 
-    // Extract text strings from Next.js RSC payload scripts
-    this.extractRscPayloadStrings($, translatable, mapping);
+    // Extract text strings from Next.js RSC payload scripts (CJK source only)
+    if (this.isCjkSource) {
+      this.extractRscPayloadStrings($, translatable, mapping);
+    }
 
     // Extract texts from data-translate-dynamic elements for runtime translation map
     this.extractDynamicTranslations($, translatable, mapping);

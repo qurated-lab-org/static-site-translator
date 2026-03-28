@@ -1,6 +1,7 @@
 export interface TranslatorConfig {
   sourceDir: string;
   outputDir: string;
+  sourceLanguage?: string;
   targetLanguages: string[];
   openaiApiKey?: string;
   openaiModel?: string;
