@@ -4,7 +4,7 @@
   "description": "Smart multi-language translator for static sites powered by OpenAI",
   "main": "dist/cli.js",
   "bin": {
-    "ai-static-translator": "./dist/cli.js"
+    "ai-static-translator": "dist/cli.js"
   },
   "files": [
     "dist/**/*",
