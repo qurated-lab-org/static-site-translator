@@ -1,4 +1,4 @@
-# 🌍 AI Static Translator
+# AI Static Translator
 
 [![npm version](https://img.shields.io/npm/v/ai-static-translator.svg)](https://www.npmjs.com/package/ai-static-translator)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -6,18 +6,18 @@
 
 Smart multi-language translator for static sites powered by OpenAI. Translate your entire static website to multiple languages in minutes with intelligent content preservation and SEO optimization.
 
-## ✨ Features
+## Features
 
-- **🚀 3-Minute Setup**: Interactive wizard for instant configuration
-- **🔐 Safety First**: Preserves code blocks, scripts, and styles perfectly
-- **💰 Cost-Efficient**: Smart caching system to minimize API costs
-- **🎯 SEO Optimized**: Automatic hreflang tags and localized meta tags
-- **📚 Glossary Support**: Consistent translations for brand terms
-- **⚡ Parallel Processing**: Fast translation with configurable concurrency
-- **🔍 Dry Run Mode**: Preview operations without API calls
-- **📊 Detailed Reports**: Track translation progress and costs
+- **3-Minute Setup**: Interactive wizard for instant configuration
+- **Safety First**: Preserves code blocks, scripts, and styles perfectly
+- **Cost-Efficient**: Smart caching system to minimize API costs
+- **SEO Optimized**: Automatic hreflang tags and localized meta tags
+- **Glossary Support**: Consistent translations for brand terms
+- **Parallel Processing**: Fast translation with configurable concurrency
+- **Dry Run Mode**: Preview operations without API calls
+- **Detailed Reports**: Track translation progress and costs
 
-## 📦 Installation
+## Installation
 
 This package requires **pnpm** for development. For usage, you can run it directly with `npx`:
 
@@ -32,7 +32,7 @@ pnpm add -g ai-static-translator
 npm install -g ai-static-translator
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Initialize Configuration
 
@@ -61,7 +61,7 @@ npx ai-static-translator translate --verbose  # Show detailed output
 npx ai-static-translator translate --clear-cache  # Clear cache before translating
 ```
 
-## ⚙️ Configuration
+## Configuration
 
 The `translator.config.json` file supports these options:
 
@@ -96,7 +96,7 @@ The `translator.config.json` file supports these options:
 }
 ```
 
-## 🔑 API Key Configuration
+## API Key Configuration
 
 Set your OpenAI API key in one of these ways:
 
@@ -104,7 +104,7 @@ Set your OpenAI API key in one of these ways:
 2. **Environment variable**: `export OPENAI_API_KEY=sk-...`
 3. **In config file**: Add `"openaiApiKey": "sk-..."` (not recommended)
 
-## 📚 Advanced Usage
+## Advanced Usage
 
 ### Glossary Management
 
@@ -116,7 +116,7 @@ Create consistent translations for specific terms:
     "ja": {
       "Sign Up": "登録",
       "Log In": "ログイン",
-      "Acme Corp": "Acme Corp"  // Keep brand name
+      "Acme Corp": "Acme Corp"
     }
   }
 }
@@ -142,11 +142,11 @@ Use different OpenAI models for quality/cost balance:
 
 ```json
 {
-  "openaiModel": "gpt-4o"  // Options: gpt-4o-mini, gpt-4o, gpt-4-turbo
+  "openaiModel": "gpt-4o"
 }
 ```
 
-## 💡 Tips for Best Results
+## Tips for Best Results
 
 1. **Structure Your HTML Properly**: Well-structured HTML with semantic tags produces better translations
 2. **Use the Cache**: Keep the cache enabled to avoid retranslating unchanged content
@@ -154,14 +154,14 @@ Use different OpenAI models for quality/cost balance:
 4. **Set Up Glossary**: Define important terms upfront for consistency
 5. **Monitor Costs**: Check the translation report for token usage and costs
 
-## 🔧 Development
+## Development
 
 This project uses **pnpm** as the package manager:
 
 ```bash
 # Clone the repository
 git clone https://github.com/qurated-lab-org/static-site-translator.git
-cd ai-static-translator
+cd static-site-translator
 
 # Install dependencies (pnpm required)
 pnpm install
@@ -173,7 +173,7 @@ pnpm run build
 pnpm run dev
 ```
 
-## 📊 Example Output
+## Example Output
 
 After translation, your file structure will look like:
 
@@ -192,7 +192,7 @@ dist-i18n/
 └── translation-report.json
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request. Make sure to:
 
@@ -201,17 +201,17 @@ Contributions are welcome! Please feel free to submit a Pull Request. Make sure 
 3. Add tests for new features
 4. Update documentation as needed
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [Commander.js](https://github.com/tj/commander.js) for CLI
 - Powered by [OpenAI API](https://openai.com/) for translations
 - Uses [Cheerio](https://cheerio.js.org/) for HTML parsing
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### pnpm not found
 This project requires pnpm. Install it with:
@@ -230,12 +230,12 @@ Ensure your OpenAI API key:
 - Choose `gpt-4o` for higher quality (higher cost)
 - Review and adjust translations as needed
 
-## 📮 Support
+## Support
 
-- 🐛 [Report Issues](https://github.com/qurated-lab-org/static-site-translator/issues)
-- 💬 [Discussions](https://github.com/qurated-lab-org/static-site-translator/discussions)
-- 📧 Contact: info@quratedlab.com
+- [Report Issues](https://github.com/qurated-lab-org/static-site-translator/issues)
+- [Discussions](https://github.com/qurated-lab-org/static-site-translator/discussions)
+- Contact: info@quratedlab.com
 
 ---
 
-Made with ❤️ by [Qurated Lab](https://github.com/qurated-lab-org)
+Made by [Qurated Lab](https://github.com/qurated-lab-org)
