@@ -1,6 +1,6 @@
 {
   "name": "ai-static-translator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Smart multi-language translator for static sites powered by OpenAI",
   "main": "dist/cli.js",
   "bin": {

@@ -160,7 +160,7 @@ This project uses **pnpm** as the package manager:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ai-static-translator.git
+git clone https://github.com/qurated-lab-org/static-site-translator.git
 cd ai-static-translator
 
 # Install dependencies (pnpm required)
@@ -232,10 +232,10 @@ Ensure your OpenAI API key:
 
 ## 📮 Support
 
-- 🐛 [Report Issues](https://github.com/yourusername/ai-static-translator/issues)
-- 💬 [Discussions](https://github.com/yourusername/ai-static-translator/discussions)
-- 📧 Contact: your-email@example.com
+- 🐛 [Report Issues](https://github.com/qurated-lab-org/static-site-translator/issues)
+- 💬 [Discussions](https://github.com/qurated-lab-org/static-site-translator/discussions)
+- 📧 Contact: info@quratedlab.com
 
 ---
 
-Made with ❤️ by the open-source community
+Made with ❤️ by [Qurated Lab](https://github.com/qurated-lab-org)
